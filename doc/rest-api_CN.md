@@ -8,7 +8,7 @@
 * HTTP `4XX` 返回错误码是指请求内容有误，这个问题是在请求发起者这边。
 * HTTP `429` 返回错误码是指请求次数上限被打破。
 * HTTP `418` 返回错误码是指IP在收到`429`错误码后还继续发送请求被自动封禁。
-* HTTP `5XX` 返回错误码是内部系统错误；这说明这个问题是在 Cococoin券商这边。在对待这个错误时，**千万** 不要把它当成一个失败的任务，因为执行状态 **未知**，有可能是成功也有可能是失败。
+* HTTP `5XX` 返回错误码是内部系统错误；这说明这个问题是在券商这边。在对待这个错误时，**千万** 不要把它当成一个失败的任务，因为执行状态 **未知**，有可能是成功也有可能是失败。
 * 任何端点都可能返回ERROR（错误）； 错误的返回payload如下
 
 ```javascript
@@ -944,9 +944,9 @@ timestamp | LONG | YES |
 
 **Notes:**
 
-* 如果只有`fromId`，会返回成交号小于`fromId`的，倒序排列。
-* 如果只有`toId`，会返回成交号小于`toId`的，升序排列。
-* 如果同时有`fromId`和`toId`, 会返回成交号在`fromId`和`toId`的，倒序排列。
+* 如果只有`fromId`，会返回订单号小于`fromId`的，倒序排列。
+* 如果只有`toId`，会返回订单号小于`toId`的，升序排列。
+* 如果同时有`fromId`和`toId`, 会返回订单号在`fromId`和`toId`的，倒序排列。
 * 如果`fromId`和`toId`都没有，会返回最新的成交记录，倒序排列。
 **Response:**
 
@@ -956,6 +956,7 @@ timestamp | LONG | YES |
     "symbol": "ETHBTC",
     "id": 28457,
     "orderId": 100234,
+    "matchOrderId": 109834,
     "price": "4.00000100",
     "qty": "12.00000000",
     "commission": "10.10000000",
@@ -1090,11 +1091,57 @@ timestamp | LONG | YES |
 {}
 ```
 
-
-#### 用户转账 (TRANSFER)
+#### 子账户列表(SUB_ACCOUNT_LIST)
 
 ```shell
-POST /openapi/v1/user/transfer
+POST /openapi/v1/subAccount/query
+```
+
+查询子账户列表
+
+**Parameters:**
+
+无
+
+**Weight:**
+5
+
+**Response:**
+
+```javascript
+[
+    {
+        "accountId": "122216245228131",
+        "accountName": "",
+        "accountType": 1,
+        "accountIndex": 0 // 账户index 0 默认账户 >0, 创建的子账户
+    },
+    {
+        "accountId": "482694560475091200",
+        "accountName": "createSubAccountByCurl", // 子账户名称
+        "accountType": 1, // 子账户类型 1 币币账户 3 合约账户
+        "accountIndex": 1
+    },
+    {
+        "accountId": "422446415267060992",
+        "accountName": "",
+        "accountType": 3,
+        "accountIndex": 0
+    },
+    {
+        "accountId": "482711469199298816",
+        "accountName": "createSubAccountByCurl",
+        "accountType": 3,
+        "accountIndex": 1
+    },
+]
+```
+
+
+#### 账户内转账 (ACCOUNT_TRANSFER)
+
+```shell
+POST /openapi/v1/transfer
 ```
 
 转账
@@ -1106,23 +1153,114 @@ POST /openapi/v1/user/transfer
 
 名称 | 类型 | 是否强制 | 描述
 ------------ | ------------ | ------------ | ------------
-targetUserId | LONG | NO |目标用户ID 如有提币地址可不填
-clientOrderId | LONG | YES |转账幂等ID
-amount | STRING | YES |数量
-tokenId | STRING | YES |tokenID
-address | STRING | NO | 提币地址
-addressExt | STRING | NO | EOS提币tag 非EOS不填
-businessType | INTEGER | YES |转账类型 3转账 70空投
-recvWindow | LONG | NO |
-timestamp | LONG | YES |
+fromAccountType | int | YES |源账户类型, 1 钱包(币币)账户 2 期权账户 3 合约账户
+fromAccountIndex | int | YES |子账户index, 主账户Api调用时候有用，从子账户列表接口获取
+toAccountType | int | YES | 目标账户类型, 1 钱包(币币)账户 2 期权账户 3 合约账户
+toAccountIndex | int | YES | 子账户index, 主账户Api调用时候有用，从子账户列表接口获取
+tokenId | STRING | YES | tokenID
+amount | STRING | YES | 转账数量
 
 **Response:**
 
 ```javascript
 {
-    "ret":0 // 0成功
+    "success":"true" // 0成功
 }
 ```
+
+**说明**
+
+1、转账账户和收款账户的其中一方，必须是主账户(钱包账户)
+
+2、主账户Api可以从钱包账户向其他账户(包括子账户)转账，也可以从其他账户向钱包账户转账
+
+3、**子账户Api调用的时候只能从当前子账户向主账户(钱包账户)转账，所以fromAccountType\fromAccountIndex\toAccountType\toAccountIndex不用填**
+
+
+#### 查询流水 (BALANCE_FLOW)
+
+```shell
+POST /openapi/v1/balance_flow
+```
+
+查询账户流水
+
+**Weight:**
+5
+
+**Parameters:**
+
+|名称 | 类型 | 是否强制 | 描述
+------------ | ------------ | ------------ | ------------
+ | accountType   | int     | 否 | 账户对应的account_type | 默认1 |
+ | accountIndex  | int     | 否 | 账户对应的account_index | 默认0 |
+ | tokenId       | string  | 否     | token_id     | eg: BTC                                |
+ | fromFlowId  | long    | 否     | 顺向查询数据 | 指定查询 id < fromFlowId的数据 |
+ | endFlowId   | long    | 否     | 反向查询数据 | 指定查询 id > |endFlowId的数据  |
+| startTime     | long    | 否     | 开始时间     | 毫秒时间戳                             |
+| endTime       | long    | 否     | 结束时间     | 毫秒时间戳                             |
+| limit          | integer | 否     | 每页记录数   | 默认50，最大100                                       |
+
+**Response:**
+
+```javascript
+[
+    {
+        "id": "539870570957903104",
+        "accountId": "122216245228131",
+        "tokenId": "BTC",
+        "tokenName": "BTC",
+        "flowTypeValue": 51, // 流水类型
+        "flowType": "USER_ACCOUNT_TRANSFER", // 流水类型名称
+        "flowName": "Transfer", // 流水类型说明
+        "change": "-12.5", // 变动值
+        "total": "379.624059937852365", // 变动后当前tokenId总资产
+        "created": "1579093587214"
+    },
+    {
+        "id": "536072393645448960",
+        "accountId": "122216245228131",
+        "tokenId": "USDT",
+        "tokenName": "USDT",
+        "flowTypeValue": 7,
+        "flowType": "AIRDROP",
+        "flowName": "Airdrop",
+        "change": "-2000",
+        "total": "918662.0917630848",
+        "created": "1578640809195"
+    }
+]
+```
+
+**说明**
+
+1、主账户Api可以查询钱包账户或者其他账户(包括子账户，指定accountType和accountIndex)的流水’
+
+2、子账户Api只能查询当前子账户的流水，所以不用指定accountType和accountIndex
+
+**流水类型说明请见如下**
+
+归类|类型参数名|类型参数代号|解释说明|
+------|------|------|------|
+通用流水类|TRADE|1|交易|
+通用流水类|FEE|2|交易手续费|
+通用流水类|TRANSFER|3|转账|
+通用流水类|DEPOSIT|4|充值|
+衍生品业务|MAKER_REWARD|27|maker奖励
+衍生品业务|PNL|28|期货等的盈亏
+衍生品业务|SETTLEMENT|30|交割
+衍生品业务|LIQUIDATION|31|强平
+衍生品业务|FUNDING_SETTLEMENT|32|期货等的资金费率结算
+用户子账户之间内部转账|USER_ACCOUNT_TRANSFER|51|userAccountTransfer 专用，流水没有subjectExtId
+OTC|OTC_BUY_COIN|65|OTC 买入coin
+OTC|OTC_SELL_COIN|66|OTC 卖出coin
+OTC|OTC_FEE|73|OTC 手续费
+OTC|OTC_TRADE|200|旧版 OTC 流水
+活动|ACTIVITY_AWARD|67|活动奖励
+活动|INVITATION_REFERRAL_BONUS|68|邀请返佣
+活动|REGISTER_BONUS|69|注册送礼
+活动|AIRDROP|70|空投
+活动|MINE_REWARD|71|挖矿奖励
 
 ### 过滤层
 
